@@ -49,9 +49,12 @@
 - 使用/重建流程見 [`docs/USAGE.md`](docs/USAGE.md)。
 - 🗑️ 舊版 `app.py` / `test_search.py`（Python + Streamlit）為**已廢棄方向**，不在 repo（見 `.gitignore`），請勿沿用。
 
+- ✅ **v1.1（2026-07-04）**：LPD/TTE 各自筆數的**隨機抽樣**+🎲重抽；每列「賣場 NCC ID / 賣場型號」欄位，以全清單證號索引**自動比對**（ID 存在清單即相符、型號寬鬆自動比對），結論徽章；匯出含比對欄位。實測全通過。
+
 ### 下一步可能的優化（待使用者提出）
 - 用真實 Excel 全量跑一次微調關鍵字/清洗規則。
 - 賣場 URL 若改版需更新 `src/app.js` 的 `MARKETS`，再用 builder 重新產生。
+- 自動抓取/讀 NCC ID 需後端且受反爬限制，若要做需先評估環境（見 `docs/DECISIONS.md` v1.1 後端評估）。
 
 ## 5. 給協作代理的守則
 

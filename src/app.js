@@ -21,13 +21,50 @@
   var state = {
     items: [],            // 全部解析後的案件
     filtered: [],         // 套用年份/模式後
-    ws: loadWorksheet(),  // 核對進度 { itemId: {status,seller,price,note,shots:[dataURL]} }
+    ws: loadWorksheet(),  // 核對進度 { itemId: {status,seller,price,note,mkId,mkModel,shots:[dataURL]} }
+    certIndex: {},        // 全清單證號索引：cleanedCert(大寫) -> [item,...]
     year: "26",
     sampleMode: false,
-    sampleN: 5,
+    sampleCount: { LPD: 5, TTE: 3, CSV: 5 }, // 各分類抽樣筆數
+    sampled: null,        // 已抽選結果 { year, sets:{cat:[itemId,...]} }，穩定不亂跳
     markets: MARKETS.reduce(function (a, m) { a[m.id] = true; return a; }, {}),
     activeShotTarget: null // 目前接受貼上截圖的 itemId
   };
+
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function normModel(s) {
+    // 寬鬆比對：僅留英數並轉大寫（AX-100 / AX 100 / ax100 視為相同）
+    return String(s || "").toUpperCase().replace(/[^0-9A-Z一-鿿]/g, "");
+  }
+  function buildCertIndex() {
+    var idx = {};
+    state.items.forEach(function (it) {
+      var k = cleanCert(it.cert).toUpperCase();
+      (idx[k] = idx[k] || []).push(it);
+    });
+    state.certIndex = idx;
+  }
+  // 賣場 NCC ID / 型號 比對結論
+  function verdictOf(it, w) {
+    var mkId = cleanCert(w.mkId || "").toUpperCase();
+    if (!mkId) return { code: "none", text: "⛔ 賣場未填 ID", exp: "" };
+    var hits = state.certIndex[mkId];
+    if (!hits || !hits.length) return { code: "notfound", text: "❌ ID 不在清單", exp: "" };
+    var m = hits[0];
+    var sameRow = mkId === cleanCert(it.cert).toUpperCase();
+    var mkModel = (w.mkModel || "").trim();
+    var suffix = sameRow ? "" : "（對應清單其他筆）";
+    if (!mkModel) return { code: "idok", text: "🔵 ID 在清單，待填型號" + suffix, exp: m.model, item: m };
+    if (normModel(mkModel) === normModel(m.model)) return { code: "ok", text: "✅ 相符" + suffix, exp: m.model, item: m };
+    return { code: "modelbad", text: "⚠️ ID 在清單，型號不符" + suffix, exp: m.model, item: m };
+  }
 
   // ────────────────────────────── 工具函式 ──────────────────────────────
   function norm(s) { return String(s == null ? "" : s).replace(/\s+/g, "").toLowerCase(); }
@@ -71,8 +108,11 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(state.ws)); } catch (e) {}
   }
   function wsOf(id) {
-    if (!state.ws[id]) state.ws[id] = { status: "未查", seller: "", price: "", note: "", kw: "", shots: [] };
-    return state.ws[id];
+    if (!state.ws[id]) state.ws[id] = { status: "未查", seller: "", price: "", note: "", kw: "", mkId: "", mkModel: "", shots: [] };
+    var w = state.ws[id];
+    if (w.mkId === undefined) w.mkId = "";
+    if (w.mkModel === undefined) w.mkModel = "";
+    return w;
   }
 
   // ────────────────────────────── Excel/CSV 解析 ──────────────────────────────
@@ -138,21 +178,33 @@
     var yr = state.year;
     var byYear = state.items.filter(function (it) { return it.year === yr; });
     if (!state.sampleMode) { state.filtered = byYear; return; }
-    // 抽樣：每分類前 N 筆
-    var counts = {}, out = [];
-    byYear.forEach(function (it) {
-      counts[it.cat] = counts[it.cat] || 0;
-      if (counts[it.cat] < state.sampleN) { out.push(it); counts[it.cat]++; }
+
+    // 隨機抽樣：每分類各抽 N 筆。抽選結果穩定，除非重抽/換年份/換檔。
+    if (!state.sampled || state.sampled.year !== yr) {
+      var groups = {};
+      byYear.forEach(function (it) { (groups[it.cat] = groups[it.cat] || []).push(it); });
+      var sets = {};
+      Object.keys(groups).forEach(function (cat) {
+        var n = state.sampleCount[cat] != null ? state.sampleCount[cat] : 5;
+        sets[cat] = shuffle(groups[cat].map(itemId)).slice(0, n);
+      });
+      state.sampled = { year: yr, sets: sets };
+    }
+    var idset = {};
+    Object.keys(state.sampled.sets).forEach(function (cat) {
+      state.sampled.sets[cat].forEach(function (id) { idset[id] = 1; });
     });
-    state.filtered = out;
+    state.filtered = byYear.filter(function (it) { return idset[itemId(it)]; });
   }
+  function reroll() { state.sampled = null; render(); }
 
   // ────────────────────────────── 匯出 ──────────────────────────────
   function collectRows() {
     return state.filtered.map(function (it) {
       var w = wsOf(itemId(it));
       var kw = (w.kw && w.kw.trim()) || defaultKeyword(it.brand, it.model, it.product);
-      return { it: it, w: w, kw: kw };
+      var vd = verdictOf(it, w);
+      return { it: it, w: w, kw: kw, vd: vd };
     });
   }
   function download(filename, blob) {
@@ -164,10 +216,11 @@
   }
   function exportCSV() {
     var rows = collectRows();
-    var head = ["分類", "證書編號", "廠牌", "型號", "委託產品", "核對狀態", "賣家", "價格", "備註", "搜尋關鍵字", "截圖數"];
+    var head = ["分類", "證書編號", "廠牌", "型號", "委託產品", "賣場NCC ID", "賣場型號", "比對結論", "對應清單型號", "核對狀態", "賣家", "價格", "備註", "搜尋關鍵字", "截圖數"];
     var lines = [head.join(",")];
     rows.forEach(function (x) {
       var line = [x.it.cat, x.it.cert, x.it.brand, x.it.model, x.it.product,
+        x.w.mkId, x.w.mkModel, x.vd.text, x.vd.exp,
         x.w.status, x.w.seller, x.w.price, x.w.note, x.kw, (x.w.shots || []).length];
       lines.push(line.map(function (v) {
         v = String(v == null ? "" : v).replace(/"/g, '""');
@@ -180,9 +233,10 @@
   }
   function exportXLSX() {
     var rows = collectRows();
-    var aoa = [["分類", "證書編號", "廠牌", "型號", "委託產品", "核對狀態", "賣家", "價格", "備註", "搜尋關鍵字", "截圖數"]];
+    var aoa = [["分類", "證書編號", "廠牌", "型號", "委託產品", "賣場NCC ID", "賣場型號", "比對結論", "對應清單型號", "核對狀態", "賣家", "價格", "備註", "搜尋關鍵字", "截圖數"]];
     rows.forEach(function (x) {
       aoa.push([x.it.cat, x.it.cert, x.it.brand, x.it.model, x.it.product,
+        x.w.mkId, x.w.mkModel, x.vd.text, x.vd.exp,
         x.w.status, x.w.seller, x.w.price, x.w.note, x.kw, (x.w.shots || []).length]);
     });
     var ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -205,6 +259,9 @@
         "<td>" + esc(x.it.brand) + "</td>" +
         "<td>" + esc(x.it.model) + "</td>" +
         "<td>" + esc(x.it.product) + "</td>" +
+        "<td>" + esc(x.w.mkId) + "</td>" +
+        "<td>" + esc(x.w.mkModel) + "</td>" +
+        '<td class="' + (x.vd.code === "ok" ? "ok" : (x.vd.code === "notfound" ? "bad" : "warn")) + '">' + esc(x.vd.text) + "<br><small>" + esc(x.vd.exp) + "</small></td>" +
         "<td><b>" + esc(x.w.status) + "</b></td>" +
         "<td>" + esc(x.w.seller) + "</td>" +
         "<td>" + esc(x.w.price) + "</td>" +
@@ -218,10 +275,12 @@
       "body{font-family:'Segoe UI','Microsoft JhengHei',sans-serif;margin:24px;color:#222}" +
       "h1{font-size:20px}table{border-collapse:collapse;width:100%;font-size:13px}" +
       "th,td{border:1px solid #ddd;padding:6px 8px;vertical-align:top}th{background:#f3f4f6}" +
+      ".ok{background:#dcfce7;color:#166534;font-weight:700}.warn{background:#fef9c3;color:#854d0e}.bad{background:#fee2e2;color:#991b1b;font-weight:700}" +
       "a{display:inline-block;margin:1px 4px;color:#2563eb}</style></head><body>" +
       "<h1>NCC 案件賣場核對報告 — 20" + state.year + " 年（共 " + rows.length + " 筆）</h1>" +
       "<p>產生時間：" + new Date().toLocaleString() + "</p>" +
       "<table><thead><tr><th>分類</th><th>證書編號</th><th>廠牌</th><th>型號</th><th>委託產品</th>" +
+      "<th>賣場NCC ID</th><th>賣場型號</th><th>比對結論</th>" +
       "<th>狀態</th><th>賣家</th><th>價格</th><th>備註</th><th>賣場搜尋</th><th>截圖</th></tr></thead>" +
       "<tbody>" + body + "</tbody></table></body></html>";
     download("NCC核對報告_20" + state.year + ".html", new Blob([html], { type: "text/html;charset=utf-8" }));
@@ -294,6 +353,9 @@
       ".mlink{display:inline-block;margin:1px;padding:2px 7px;border-radius:6px;background:#eff6ff;color:#1d4ed8;text-decoration:none;font-size:11.5px}" +
       ".mlink:hover{background:#dbeafe}" +
       ".shots img{max-width:70px;max-height:52px;margin:1px;border:1px solid #ccc;border-radius:4px;cursor:pointer}" +
+      ".v-ok{background:#dcfce7;color:#166534;font-weight:700}.v-warn{background:#fef9c3;color:#854d0e;font-weight:700}" +
+      ".v-info{background:#dbeafe;color:#1e40af}.v-bad{background:#fee2e2;color:#991b1b;font-weight:700}.v-none{color:#94a3b8}" +
+      ".exp{font-size:10.5px;color:#64748b;margin-top:2px}" +
       ".drop{border:1px dashed #cbd5e1;border-radius:6px;padding:4px;font-size:11px;color:#94a3b8;text-align:center;cursor:pointer}" +
       ".drop.active{border-color:#4f46e5;color:#4f46e5;background:#eef2ff}" +
       ".logs{font-family:monospace;font-size:12px;white-space:pre-wrap;background:#0f172a;color:#a7f3d0;border-radius:8px;padding:10px;max-height:160px;overflow:auto}" +
@@ -329,8 +391,10 @@
       html += '<span><label>🗓️ 年份</label><select id="year">' + yrOpts.map(function (o) {
         return '<option value="' + o + '"' + (o === state.year ? " selected" : "") + '>20' + o + "</option>";
       }).join("") + "</select></span>";
-      html += '<span><label><input type="checkbox" id="sampleMode"' + (state.sampleMode ? " checked" : "") + '> 抽樣模式(每分類前</label>' +
-        '<input type="number" id="sampleN" value="' + state.sampleN + '" min="1" max="999" style="width:64px"> 筆)</span>';
+      html += '<span><label><input type="checkbox" id="sampleMode"' + (state.sampleMode ? " checked" : "") + '> 隨機抽樣</label>' +
+        ' LPD <input type="number" id="snLPD" value="' + state.sampleCount.LPD + '" min="1" max="999" style="width:56px">' +
+        ' TTE <input type="number" id="snTTE" value="' + state.sampleCount.TTE + '" min="1" max="999" style="width:56px"> 筆' +
+        ' <button class="btn sm" id="reroll"' + (state.sampleMode ? "" : " disabled") + '>🎲 重抽</button></span>';
       html += '<span>' + MARKETS.map(function (m) {
         return '<span class="mk"><input type="checkbox" data-mk="' + m.id + '"' + (state.markets[m.id] ? " checked" : "") + '> ' + m.name + "</span>";
       }).join("") + "</span>";
@@ -339,13 +403,18 @@
       // 統計
       var byCat = {};
       state.filtered.forEach(function (it) { byCat[it.cat] = (byCat[it.cat] || 0) + 1; });
-      var done = 0;
-      state.filtered.forEach(function (it) { var w = state.ws[itemId(it)]; if (w && w.status && w.status !== "未查") done++; });
+      var done = 0, matched = 0;
+      state.filtered.forEach(function (it) {
+        var w = state.ws[itemId(it)];
+        if (w && w.status && w.status !== "未查") done++;
+        if (w && verdictOf(it, w).code === "ok") matched++;
+      });
       html += '<div class="panel">';
       html += '<span class="stat"><b>' + state.items.length + "</b>總案件</span>";
       html += '<span class="stat"><b>' + state.filtered.length + "</b>20" + state.year + " 年待查</span>";
       Object.keys(byCat).forEach(function (c) { html += '<span class="stat"><b>' + byCat[c] + "</b>" + c + "</span>"; });
       html += '<span class="stat"><b>' + done + "</b>已核對</span>";
+      html += '<span class="stat"><b>' + matched + "</b>✅ 相符</span>";
       html += ' &nbsp; <button class="btn g sm" id="expHtml">📄 匯出HTML報告</button> ' +
         '<button class="btn g sm" id="expXlsx">📊 匯出Excel</button> ' +
         '<button class="btn g sm" id="expCsv">📑 匯出CSV</button> ' +
@@ -357,10 +426,11 @@
       // 工作表
       html += '<div class="panel" style="overflow:auto"><table class="ws"><thead><tr>' +
         "<th>分類</th><th>證書編號</th><th>廠牌 / 型號</th><th>委託產品</th><th>搜尋關鍵字</th>" +
-        "<th>賣場一鍵搜尋</th><th>狀態</th><th>賣家</th><th>價格</th><th>備註</th><th>截圖(貼上/拖放)</th></tr></thead><tbody>";
+        "<th>賣場一鍵搜尋</th><th>賣場 NCC ID</th><th>賣場型號</th><th>比對結論</th>" +
+        "<th>狀態</th><th>賣家</th><th>價格</th><th>備註</th><th>截圖(貼上/拖放)</th></tr></thead><tbody>";
 
       if (!state.filtered.length) {
-        html += '<tr><td colspan="11" style="text-align:center;color:#94a3b8">此年份沒有案件，請調整年份。</td></tr>';
+        html += '<tr><td colspan="14" style="text-align:center;color:#94a3b8">此年份沒有案件，請調整年份。</td></tr>';
       }
       state.filtered.forEach(function (it) {
         var id = itemId(it), w = wsOf(id);
@@ -372,6 +442,9 @@
         var shots = (w.shots || []).map(function (s, i) {
           return '<img src="' + s + '" data-del="' + id + "|" + i + '" title="點擊刪除">';
         }).join("");
+        var vd = verdictOf(it, w);
+        var vClass = { ok: "v-ok", modelbad: "v-warn", idok: "v-info", notfound: "v-bad", none: "v-none" }[vd.code];
+        var expHint = vd.exp ? '<div class="exp">清單型號：' + esc(vd.exp) + "</div>" : "";
         html += "<tr>" +
           '<td class="' + it.cat.toLowerCase() + '">' + esc(it.cat) + "</td>" +
           "<td>" + esc(it.cert) + "</td>" +
@@ -379,6 +452,9 @@
           "<td>" + esc(it.product) + "</td>" +
           '<td><input type="text" data-kw="' + id + '" value="' + esc(kw) + '" style="width:150px"></td>' +
           '<td style="min-width:150px">' + links + "</td>" +
+          '<td><input type="text" data-f="mkId" data-id="' + id + '" value="' + esc(w.mkId) + '" placeholder="賣場看到的ID" style="width:120px"></td>' +
+          '<td><input type="text" data-f="mkModel" data-id="' + id + '" value="' + esc(w.mkModel) + '" placeholder="賣場型號" style="width:100px">' + expHint + "</td>" +
+          '<td class="' + vClass + '">' + esc(vd.text) + "</td>" +
           '<td><select data-f="status" data-id="' + id + '">' + STATUS_OPTIONS.map(function (o) {
             return '<option' + (w.status === o ? " selected" : "") + ">" + o + "</option>";
           }).join("") + "</select></td>" +
@@ -406,9 +482,13 @@
     var yr = document.getElementById("year");
     if (yr) yr.onchange = function () { state.year = yr.value; render(); };
     var sm = document.getElementById("sampleMode");
-    if (sm) sm.onchange = function () { state.sampleMode = sm.checked; render(); };
-    var sn = document.getElementById("sampleN");
-    if (sn) sn.onchange = function () { state.sampleN = Math.max(1, parseInt(sn.value, 10) || 1); render(); };
+    if (sm) sm.onchange = function () { state.sampleMode = sm.checked; state.sampled = null; render(); };
+    var snL = document.getElementById("snLPD");
+    if (snL) snL.onchange = function () { state.sampleCount.LPD = Math.max(1, parseInt(snL.value, 10) || 1); state.sampled = null; render(); };
+    var snT = document.getElementById("snTTE");
+    if (snT) snT.onchange = function () { state.sampleCount.TTE = Math.max(1, parseInt(snT.value, 10) || 1); state.sampled = null; render(); };
+    var rr = document.getElementById("reroll");
+    if (rr) rr.onclick = function () { reroll(); };
     Array.prototype.forEach.call(document.querySelectorAll("[data-mk]"), function (cb) {
       cb.onchange = function () { state.markets[cb.getAttribute("data-mk")] = cb.checked; render(); };
     });
@@ -423,12 +503,15 @@
     var pf = document.getElementById("progFile");
     if (pf) pf.onchange = function (e) { if (e.target.files[0]) importProgress(e.target.files[0]); };
 
-    // 欄位編輯
+    // 欄位編輯：oninput 即存(不重繪，避免打字失焦)；onchange(blur/選取)重繪以更新比對結論與統計
     Array.prototype.forEach.call(document.querySelectorAll("[data-f]"), function (el) {
-      el.oninput = el.onchange = function () {
-        var w = wsOf(el.getAttribute("data-id"));
-        w[el.getAttribute("data-f")] = el.value;
+      el.oninput = function () {
+        wsOf(el.getAttribute("data-id"))[el.getAttribute("data-f")] = el.value;
         saveWorksheet();
+      };
+      el.onchange = function () {
+        wsOf(el.getAttribute("data-id"))[el.getAttribute("data-f")] = el.value;
+        saveWorksheet(); render();
       };
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-kw]"), function (el) {
@@ -475,6 +558,8 @@
                         : parseWorkbook(new Uint8Array(fr.result), false);
         if (!res.items.length) { toast("未讀到有效案件，請確認檔案", true); }
         state.items = res.items;
+        state.sampled = null;
+        buildCertIndex();
         render();
         toast("已讀入 " + res.items.length + " 筆案件");
       } catch (e) { toast("解析失敗：" + e.message, true); }
@@ -492,6 +577,8 @@
       { cat: "TTE", cert: "CCAN264G0010T8", brand: "PetGlobal", model: "PG-24A01", product: "寵物穿戴式定位通訊器", year: "26" },
       { cat: "TTE", cert: "CCAN264G0020T1", brand: "AutoLink", model: "ALX-8", product: "車用多媒體盒", year: "26" }
     ];
+    state.sampled = null;
+    buildCertIndex();
     render();
     toast("已載入內建測試樣本(6 筆)");
   }
