@@ -40,9 +40,18 @@
 ## 4. 目前狀態
 
 - ✅ 需求釐清、限制確認、資料結構實測完成。
-- ✅ 協作文件（本批 md）建立。
-- ⬜ **尚未開始撰寫 `NCC核對工具.html`**（等使用者說「開始」）。
+- ✅ 協作文件建立。
+- ✅ **主工具完成並實測通過**（2026-07-04）：
+  - `src/app.js`：完整工具邏輯（解析/篩選/六賣場連結/核對表/localStorage/匯出 HTML+xlsx+CSV+進度）。
+  - `dist/NCC核對工具.html`：加密單一檔（密碼 `ncc2026`），已於瀏覽器實測：對/錯密碼、Excel 解析、年份過濾、連結、編輯、匯出、截圖皆正常，無 console 錯誤。
+  - `dist/builder.html`：換密碼/更新用的瀏覽器加密器（免 Python）。
+  - `sample/NCC_測試樣本.xlsx`：去識別化測試樣本。
+- 使用/重建流程見 [`docs/USAGE.md`](docs/USAGE.md)。
 - 🗑️ 舊版 `app.py` / `test_search.py`（Python + Streamlit）為**已廢棄方向**，不在 repo（見 `.gitignore`），請勿沿用。
+
+### 下一步可能的優化（待使用者提出）
+- 用真實 Excel 全量跑一次微調關鍵字/清洗規則。
+- 賣場 URL 若改版需更新 `src/app.js` 的 `MARKETS`，再用 builder 重新產生。
 
 ## 5. 給協作代理的守則
 

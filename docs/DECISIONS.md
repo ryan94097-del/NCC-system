@@ -43,4 +43,10 @@
 - **補充**:2026-07-04 已將 GitHub repo `ryan94097-del/NCC-system` 由 public 改為 **private**。
 
 - **理由**：`RCB工服委託登錄表_TUV_2026.xlsx` 含真實公司認證資料，GitHub 可能公開。
-- **決策**：以 `.gitignore` 排除 `*.xlsx`；測試用去識別化樣本。
+- **決策**：以 `.gitignore` 排除 `*.xlsx`（例外：`sample/*.xlsx` 去識別化樣本可進）；測試用去識別化樣本。
+
+### 2026-07-04 — 主工具完成（v1）
+
+- 以 workflow 方式一次完成：測試樣本 → `src/app.js` → 瀏覽器實測 → AES 加密 → `builder.html` → 產出 `dist/`。
+- 實測全通過：Excel 表頭偵測/分流/清洗、年份過濾、六賣場連結、關鍵字補強、狀態/賣家/價格/截圖編輯、localStorage、匯出 HTML/Excel/CSV/進度、CSV 之 UTF-8 BOM、AES 對/錯密碼。
+- 預設密碼 `ncc2026`；截圖僅保留於 HTML 報告。

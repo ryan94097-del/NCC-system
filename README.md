@@ -23,9 +23,17 @@
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 架構與資料結構
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — 決策紀錄
 
+## 快速開始
+
+1. 雙擊 `dist/NCC核對工具.html`，輸入密碼 `ncc2026`。
+2. 上傳認證清單 Excel（或按「載入測試樣本」）。
+3. 點各賣場按鈕搜尋 → 填狀態/價格/截圖 → 匯出報告。
+
+詳見 [`docs/USAGE.md`](docs/USAGE.md)。換密碼用 `dist/builder.html`。
+
 ## 狀態
 
-需求與架構已定案，主程式 `NCC核對工具.html` 尚未開始開發。
+✅ 主工具完成並實測通過（2026-07-04）。
 
 ## 注意
 
