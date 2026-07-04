@@ -33,6 +33,7 @@
 - **核對工作表**：狀態標記（未查/已上架/未上架/存疑）、備註、手動填價、賣家名、拖放貼上截圖（base64 內嵌）。
 - **搜尋模式切換**：完整清單 / 每分類只列前 N 筆（抽樣）。
 - 匯出 CSV（`utf-8-sig` 無亂碼）/ Excel，含上述人工填入的證據。
+- **共用密碼登入**：工具本體以 Web Crypto **AES-GCM 加密**，輸對共用密碼才解得開（詳見 `docs/ARCHITECTURE.md` §6）。另附純 HTML 的 `builder.html` 供在瀏覽器內更新內容/換密碼、重新產生加密檔（免 Python）。
 
 資料結構、賣場 URL 樣式、關鍵字策略等細節見 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
