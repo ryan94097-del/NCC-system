@@ -59,3 +59,15 @@
   - 比對：每列新增「賣場 NCC ID」「賣場型號」欄；以全清單證號索引自動判定。**ID 比對標準＝存在清單任一筆即相符**（並標註是否對到其他筆）；**型號自動比對**（寬鬆：僅比英數、忽略大小寫/符號）。結論徽章：✅相符 / ⚠️型號不符 / 🔵待填型號 / ❌不在清單 / ⛔未填。
   - 匯出（CSV/Excel/HTML）皆含賣場ID、賣場型號、比對結論、對應清單型號。
 - **關於後端**：評估 Firebase / Streamlit Cloud / 免安裝 exe。結論：自動讀取賣場 NCC ID 受反爬蟲+圖片內文字所限，換後端也不可靠；雲端方案還可能被公司網路/資料政策擋。使用者選擇**維持純 HTML** 先加功能。細節見對話。
+
+### 2026-07-04 — v2：Streamlit Cloud 版（真正自動比對 Yahoo/MOMO）
+
+- **背景**：使用者要「自動比對賣場 NCC ID + 確認型號 + 給連結 + 隨機抽樣湊筆數，湊不滿自動找下一筆」。
+- **可行性實測（關鍵）**：
+  - **Yahoo購物**：搜尋頁 HTML 內含結構化 `NCC認證碼_XXX` + `型號_XXX`（80 商品 73 有配對）→ 一次請求即可自動比對。🟢
+  - **MOMO**：搜尋頁無 ID，但**商品詳細頁**原始 HTML 含 `NCC字號：CCAN...`（結構化 spec）→ 搜尋取 i_code 再逐頁抓。🟢（較慢、請求量大）
+  - **酷澎** 403 擋、**蝦皮** API 無文字、**Google** 聚合無 ID、從伺服器爬 Google 會被驗證碼擋。🔴
+  - 實測 verify 管線：TP-Link Deco BE22→Yahoo 精確符合；Roborock Qrevo C Pro→MOMO 精確符合；fill-to-count（假貨自動跳過、真貨補齊）通過。
+- **決策**：新增 `streamlit_app/`（app.py/ncc_core.py/scrapers.py/verify.py/requirements.txt），部署到 Streamlit Community Cloud（免費）。確認標準＝**ID 在清單 + 型號一致**（使用者選）。共用密碼以 `st.secrets["app_password"]`（預設 ncc2026）。
+- **前提/限制**：需公司放行 `*.streamlit.app` 且資料政策允許上傳；靠賣場不改版/不封鎖；MOMO 較慢有被封風險（以嘗試上限/延遲控制）。
+- **與純 HTML 版並存**：HTML 版仍是鎖定環境的保底方案，兩者共用解析/比對規則。

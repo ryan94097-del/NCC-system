@@ -4,10 +4,10 @@
 # 例外：去識別化測試樣本可進 repo，方便協作/測試
 !sample/*.xlsx
 
-# 已廢棄的舊 Python/Streamlit 版本（方向已改為純前端 HTML）
-app.py
-test_search.py
-requirements.txt
+# 已廢棄的舊 Python/Streamlit 版本（只忽略專案根目錄那支，streamlit_app/ 下的要保留）
+/app.py
+/test_search.py
+/requirements.txt
 
 # Python 執行環境（本專案不再使用）
 __pycache__/

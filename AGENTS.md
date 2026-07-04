@@ -51,10 +51,17 @@
 
 - ✅ **v1.1（2026-07-04）**：LPD/TTE 各自筆數的**隨機抽樣**+🎲重抽；每列「賣場 NCC ID / 賣場型號」欄位，以全清單證號索引**自動比對**（ID 存在清單即相符、型號寬鬆自動比對），結論徽章；匯出含比對欄位。實測全通過。
 
+- ✅ **v2（2026-07-04）Streamlit Cloud 版**（`streamlit_app/`）：**真正自動化**——到 Yahoo購物/MOMO 搜尋、讀取賣場 NCC 認證碼、比對清單+型號一致；LPD/TTE 各自筆數隨機抽樣，**湊不滿自動找下一筆**。實測 Yahoo(TP-Link)、MOMO(Roborock) 皆能確認；fill-to-count 邏輯通過。其他賣場(酷澎403/蝦皮API/Google)只給手動連結。部署見 `streamlit_app/README.md`。
+
+### 兩條並行路線（重要）
+- **`src/` + `dist/`｜純 HTML 版**：公司鎖定機、離線、零安裝、無資料外流。手動點賣場 + 人工/自動輔助比對。
+- **`streamlit_app/`｜Streamlit Cloud 版**：網址版、可自動抓 Yahoo/MOMO 的 NCC ID。**前提**：公司需放行 `*.streamlit.app` 且資料政策允許上傳。
+- 兩者共用同一套解析/比對規則，改邏輯時注意兩邊一致。
+
 ### 下一步可能的優化（待使用者提出）
 - 用真實 Excel 全量跑一次微調關鍵字/清洗規則。
-- 賣場 URL 若改版需更新 `src/app.js` 的 `MARKETS`，再用 builder 重新產生。
-- 自動抓取/讀 NCC ID 需後端且受反爬限制，若要做需先評估環境（見 `docs/DECISIONS.md` v1.1 後端評估）。
+- 賣場 URL 若改版需更新（HTML 版 `src/app.js` 的 `MARKETS`；Streamlit 版 `streamlit_app/scrapers.py`）。
+- Yahoo/MOMO 版面若改版，更新 `streamlit_app/scrapers.py` 的解析。
 
 ## 5. 給協作代理的守則
 
