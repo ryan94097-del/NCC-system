@@ -1,0 +1,23 @@
+# 真實公司認證資料 — 隱私考量，不進 repo
+*.xlsx
+*.xls
+
+# 已廢棄的舊 Python/Streamlit 版本（方向已改為純前端 HTML）
+app.py
+test_search.py
+requirements.txt
+
+# Python 執行環境（本專案不再使用）
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 本機工具設定/暫存
+.claude/
+
+# 系統/編輯器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
