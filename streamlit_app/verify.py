@@ -121,7 +121,7 @@ def format_row(item, result, pool_key):
 
     store = c.get("store", "") if c else ""
     invoice = ""
-    if store in ["Yahoo", "MOMO", "酷澎"]:
+    if store in ["Yahoo", "MOMO", "酷澎", "順發", "良興"]:
         invoice = "✅ 是"
     elif store in ["露天", "蝦皮"]:
         invoice = "⚠️ 視賣家"
@@ -151,7 +151,9 @@ def format_row(item, result, pool_key):
         "Google購物": ml.get("Google購物", ""),
         "露天": ml.get("露天", ""),
         "酷澎": ml.get("酷澎", ""),
-        "蝦皮": ml.get("蝦皮", "")
+        "蝦皮": ml.get("蝦皮", ""),
+        "順發": ml.get("順發", ""),
+        "良興": ml.get("良興", ""),
     }
 
 
@@ -159,7 +161,7 @@ def _discover_format_row(candidate, pool_key, kw_used):
     """格式化「發現模式」（其他 RCB）的結果為 dict。"""
     store = candidate.get("store", "")
     invoice = ""
-    if store in ["Yahoo", "MOMO", "酷澎"]:
+    if store in ["Yahoo", "MOMO", "酷澎", "順發", "良興"]:
         invoice = "✅ 是"
     elif store in ["露天", "蝦皮"]:
         invoice = "⚠️ 視賣家"
@@ -191,6 +193,8 @@ def _discover_format_row(candidate, pool_key, kw_used):
         "露天": ml.get("露天", ""),
         "酷澎": ml.get("酷澎", ""),
         "蝦皮": ml.get("蝦皮", ""),
+        "順發": ml.get("順發", ""),
+        "良興": ml.get("良興", ""),
     }
 
 

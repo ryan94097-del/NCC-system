@@ -16,12 +16,13 @@ UA = {
 # 完整 14 碼 NCC ID 正規表示式
 NCC_RE = r"C[CB][A-Z][A-Z]\d{2}[A-Z0-9]{2}\d{3}[0-9A-Z][TCES][0-9A-Z]"
 
-# 其他賣場的手動搜尋連結（排除 PChome，僅保留手動）
 MANUAL_MARKETS = [
     ("Google購物", "https://www.google.com/search?tbm=shop&q={kw}"),
     ("露天", "https://find.ruten.com.tw/s/?q={kw}"),
     ("酷澎", "https://www.tw.coupang.com/search?q={kw}"),
     ("蝦皮", "https://shopee.tw/search?keyword={kw}"),
+    ("順發", "https://www.sunfar.com.tw/search/target.aspx?keyword={kw}"),
+    ("良興", "https://www.eclife.com.tw/Search?q={kw}"),
 ]
 
 def manual_links(keyword):

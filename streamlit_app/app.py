@@ -367,6 +367,8 @@ def main():
             "露天": st.column_config.LinkColumn("露天", display_text="搜尋"),
             "酷澎": st.column_config.LinkColumn("酷澎", display_text="搜尋"),
             "蝦皮": st.column_config.LinkColumn("蝦皮", display_text="搜尋"),
+            "順發": st.column_config.LinkColumn("順發", display_text="搜尋"),
+            "良興": st.column_config.LinkColumn("良興", display_text="搜尋"),
         }
         
         with tab_all:
