@@ -1,40 +1,33 @@
 # -*- coding: utf-8 -*-
-"""NCC 清單解析與比對核心邏輯（與純 HTML 版一致，移植為 Python）。"""
+"""NCC 清單解析與分組核心。"""
 import io
 import re
 import pandas as pd
 
 CJK = "一-鿿"
 
-
 def norm(s):
     return re.sub(r"\s+", "", str("" if s is None else s)).strip().lower()
 
-
 def clean_cert(s):
-    """去掉換行後附註（如「\\n(系列1)」）與前後空白。"""
+    """去掉換行後附註（如「\n(系列1)」）與前後空白。"""
     return re.split(r"[\r\n]", str("" if s is None else s))[0].strip()
-
 
 def year_of(cert):
     c = clean_cert(cert).upper()
     return c[4:6] if len(c) >= 6 and c.startswith("CC") else ""
 
-
 def norm_model(s):
     """寬鬆型號比對：僅保留中英數並轉大寫（AX-100 / AX 100 / ax100 視為相同）。"""
     return re.sub(r"[^0-9A-Za-z" + CJK + "]", "", str("" if s is None else s)).upper()
-
 
 def is_generic_model(m):
     m = str(m or "").strip()
     return len(m) < 4 or m.isdigit()
 
-
 def chinese_of(s):
     m = re.findall(r"[" + CJK + r"][" + CJK + r"0-9A-Za-z]*", str(s or ""))
     return "".join(m)
-
 
 def default_keyword(brand, model, product):
     base = (str(brand or "").strip() + " " + str(model or "").strip()).strip()
@@ -44,6 +37,65 @@ def default_keyword(brand, model, product):
             base = (base + " " + cat).strip()
     return base
 
+def rcb_code(cert: str) -> str:
+    """取得 RCB 代碼（第 3-4 碼）。如 'CCAN25LP0010T3' → 'AN'"""
+    c = clean_cert(cert).upper()
+    return c[2:4] if len(c) >= 4 and c.startswith("CC") else ""
+
+def is_ccan(cert: str) -> bool:
+    """判斷是否為 CCAN（RCB 代碼 = 'AN'）"""
+    return rcb_code(cert) == "AN"
+
+def category_code(cert: str) -> str:
+    """取得設備分類碼（第 7-8 碼）。如 'CCAN25LP0010T3' → 'LP'"""
+    c = clean_cert(cert).upper()
+    return c[6:8] if len(c) >= 8 else ""
+
+def split_pools(items: list, year: str) -> dict:
+    """將指定年份的產品分為 4 個池：
+    {'LPD_CCAN': [...], 'LPD_OTHER': [...], 'TTE_CCAN': [...], 'TTE_OTHER': [...]}
+    判斷 CCAN: cert[2:4] == 'AN'
+    """
+    pools = {
+        'LPD_CCAN': [],
+        'LPD_OTHER': [],
+        'TTE_CCAN': [],
+        'TTE_OTHER': []
+    }
+    for it in items:
+        if it.get("year") != year:
+            continue
+        cat = it.get("cat") # "LPD" or "TTE"
+        if cat not in ["LPD", "TTE"]:
+            continue
+        ccan_suffix = "_CCAN" if is_ccan(it.get("cert", "")) else "_OTHER"
+        pool_key = f"{cat}{ccan_suffix}"
+        pools[pool_key].append(it)
+    return pools
+
+def multi_keywords(brand, model, product, cert) -> list:
+    """產生多層搜尋關鍵字列表（由精準到寬泛）
+    第1輪: 品牌+型號
+    第2輪: 品牌+型號+產品類別中文詞（僅當型號短/通用時）
+    第3輪: NCC ID 直搜
+    """
+    keywords = []
+    base = (str(brand or "").strip() + " " + str(model or "").strip()).strip()
+    if base:
+        keywords.append(base)
+    
+    if is_generic_model(model):
+        cat = chinese_of(product)
+        if cat and base:
+            kw2 = (base + " " + cat).strip()
+            if kw2 not in keywords:
+                keywords.append(kw2)
+    
+    c = clean_cert(cert)
+    if c and c not in keywords:
+        keywords.append(c)
+        
+    return keywords
 
 def parse_workbook(file_bytes):
     """讀取 Excel，抓第 2 列表頭、分流 LPD/TTE、清洗雜訊列。回傳 items list。"""
@@ -98,7 +150,6 @@ def parse_workbook(file_bytes):
             seen.add(k)
             out.append(it)
     return out, report
-
 
 def build_cert_index(items):
     idx = {}

@@ -71,3 +71,17 @@
 - **決策**：新增 `streamlit_app/`（app.py/ncc_core.py/scrapers.py/verify.py/requirements.txt），部署到 Streamlit Community Cloud（免費）。確認標準＝**ID 在清單 + 型號一致**（使用者選）。共用密碼以 `st.secrets["app_password"]`（預設 ncc2026）。
 - **前提/限制**：需公司放行 `*.streamlit.app` 且資料政策允許上傳；靠賣場不改版/不封鎖；MOMO 較慢有被封風險（以嘗試上限/延遲控制）。
 - **與純 HTML 版並存**：HTML 版仍是鎖定環境的保底方案，兩者共用解析/比對規則。
+
+### 2026-07-25 — v3 Streamlit 版重寫：CCAN 雙池抽樣 + 多層搜尋 + 深色 UI
+
+- **背景**：原 v2 搜尋效果不佳（僅單一關鍵字策略）、缺少 CCAN/其他 RCB 分池抽樣、UI 為 Streamlit 預設樣式。
+- **改進內容**：
+  1. **CCAN 雙池抽樣**：依 NCC ID 第 3-4 碼（RCB 代碼）分為 CCAN（AN）和其他 RCB 兩池，LP/TTE 各 2 池共 4 組獨立配額。
+  2. **多層搜尋策略**：第 1 輪品牌+型號 → 第 2 輪補強產品類別中文詞 → 第 3 輪 NCC ID 直搜，大幅提高命中率。
+  3. **新增露天拍賣爬蟲**：解析頁面內嵌 JSON 或 HTML，從標題提取 NCC ID。
+  4. **改進 MOMO/Yahoo 爬蟲**：增加 retry 機制、提取價格欄位、更完整的 NCC ID 匹配。
+  5. **深色科技風 UI**：自訂 CSS（漸層標題、玻璃擬態卡片、漸層按鈕）、Streamlit config.toml 深色主題。
+  6. **結果增強**：新增池別、搜尋輪次、可開發票、價格欄位；結果表格含 tabs（全部/已找到/未找到）。
+  7. **雙格式匯出**：CSV + Excel。
+- **決策**：直接取代原 `streamlit_app/` 所有檔案。維持密碼機制（ncc2026）、Streamlit Cloud 部署方式不變。
+- **測試結果**：Excel 解析通過（11 筆樣本，LPD=7/TTE=4）、分池正確（CCAN/OTHER）、核心函式全部驗證通過。
