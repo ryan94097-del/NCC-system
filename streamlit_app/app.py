@@ -3,6 +3,16 @@ import streamlit as st
 from ncc_core import parse_workbook, build_cert_index, split_pools
 from verify import run_dual_pool
 
+# 快取 Excel 解析，避免每次 widget 互動都重新解析
+@st.cache_data(show_spinner=False)
+def _cached_parse(file_bytes):
+    return parse_workbook(file_bytes)
+
+@st.cache_data(show_spinner=False)
+def _cached_index(file_bytes):
+    items, _ = parse_workbook(file_bytes)
+    return build_cert_index(items)
+
 st.set_page_config(page_title="NCC 電商市場監督搜尋引擎", page_icon="🔍", layout="wide")
 
 # === 自訂 CSS（深色科技風）===
@@ -178,14 +188,15 @@ def main():
             """)
         return
     
-    # 解析 Excel
+    # 解析 Excel（已快取，切換設定不會重新解析）
     try:
-        items, report = parse_workbook(up.getvalue())
+        file_bytes = up.getvalue()
+        items, report = _cached_parse(file_bytes)
     except Exception as e:
         st.error(f"❌ 解析失敗：{e}")
         return
     
-    cert_index = build_cert_index(items)
+    cert_index = _cached_index(file_bytes)
     
     # 解析報告
     with st.expander("📄 解析報告", expanded=False):
