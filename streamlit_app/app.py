@@ -85,31 +85,9 @@ hr {
 def inject_css():
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# === 密碼門檻 ===
-def _correct_password():
-    try:
-        return st.secrets.get("app_password", "ncc2026")
-    except Exception:
-        return "ncc2026"
-
+# === 密碼門檻（已停用）===
 def gate():
-    if st.session_state.get("auth"):
-        return True
-    inject_css()
-    st.markdown("""<div style='text-align:center; padding: 3rem 0;'>
-        <h1 style='font-size:2.5rem;'>🔍 NCC 電商市場監督搜尋引擎</h1>
-        <p style='color:#94a3b8; font-size:1.1rem;'>National Communications Commission — 市場抽驗搜尋工具</p>
-    </div>""", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        pw = st.text_input("🔐 請輸入共用密碼", type="password", placeholder="輸入密碼後按 Enter")
-        if pw:
-            if pw == _correct_password():
-                st.session_state["auth"] = True
-                st.rerun()
-            else:
-                st.error("❌ 密碼錯誤，請重試。")
-    return False
+    return True
 
 # === 主頁面 ===
 def main():
