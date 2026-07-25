@@ -21,7 +21,12 @@ def find_best_match(candidates, item, cert_index, price_min=None, price_max=None
     for c in candidates:
         # 價格區間篩選
         p = parse_price(c.get("price", ""))
-        if p is not None:
+        has_price_filter = (price_min is not None) or (price_max is not None)
+        if has_price_filter:
+            if p is None:
+                # 有設定價格區間但無法取得價格 → 跳過
+                c["_price_ok"] = False
+                continue
             if price_min is not None and p < price_min:
                 c["_price_ok"] = False
                 continue

@@ -212,6 +212,13 @@ def main():
     total_year = sum(len(v) for v in pools.values())
     st.caption(f"清單總計 {total_items} 筆，20{year}年共 {total_year} 筆")
     
+    # 空池警告
+    quota_map = {"LPD_CCAN": lpd_ccan, "LPD_OTHER": lpd_other, "TTE_CCAN": tte_ccan, "TTE_OTHER": tte_other}
+    label_map = {"LPD_CCAN": "LP-CCAN", "LPD_OTHER": "LP-其他RCB", "TTE_CCAN": "TTE-CCAN", "TTE_OTHER": "TTE-其他RCB"}
+    for pk in ["LPD_CCAN", "LPD_OTHER", "TTE_CCAN", "TTE_OTHER"]:
+        if quota_map[pk] > 0 and len(pools.get(pk, [])) == 0:
+            st.warning(f"⚠️ **{label_map[pk]}** 配額 {quota_map[pk]} 筆，但清單中無此類產品（0 筆可抽），將跳過此池。")
+    
     st.markdown("---")
     
     # 搜尋按鈕
