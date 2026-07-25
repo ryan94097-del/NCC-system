@@ -72,16 +72,21 @@ DISCOVER_KW_TTE = [
     "4G路由器", "5G路由器", "行動WiFi", "行動熱點",
     "衛星電話", "對講機",
 ]
+DISCOVER_KW_DOC = [
+    "無線螢幕分享器", "藍牙發射器", "RF發射器", "無線耳機線",
+    "無線控制器", "感應器"
+]
 
 # LP 分類碼對照
 LP_CODES = {"LP"}   # 低功率射頻
 TTE_CODES = {"4G", "3G", "5G", "TE"}  # 電信終端
+DOC_CODES = {"DO", "DC"}  # 符合性聲明
 
 def match_ncc_criteria(ncc_id: str, year: str, want_cat: str) -> bool:
     """判斷一個 NCC ID 是否符合「其他 RCB」發現條件：
     1. 年份碼（第 5-6 碼）== year
     2. RCB 代碼（第 3-4 碼）!= 'AN'（非 CCAN）
-    3. 分類碼（第 7-8 碼）符合 want_cat ('LPD' 或 'TTE')
+    3. 分類碼（第 7-8 碼）符合 want_cat ('LPD', 'TTE', 或 'DOC')
     """
     c = clean_cert(ncc_id).upper()
     if len(c) < 8 or not c.startswith("CC"):
@@ -98,29 +103,88 @@ def match_ncc_criteria(ncc_id: str, year: str, want_cat: str) -> bool:
         return cat_code in LP_CODES
     elif want_cat == "TTE":
         return cat_code in TTE_CODES
+    elif want_cat == "DOC":
+        return cat_code in DOC_CODES or (cat_code not in LP_CODES and cat_code not in TTE_CODES)
     return False
 
 def split_pools(items: list, year: str) -> dict:
-    """將指定年份的產品分為 4 個池：
-    {'LPD_CCAN': [...], 'LPD_OTHER': [...], 'TTE_CCAN': [...], 'TTE_OTHER': [...]}
+    """將指定年份的產品分為 6 個池（LP/TTE/DOC × CCAN/OTHER）。
     判斷 CCAN: cert[2:4] == 'AN'
     """
     pools = {
-        'LPD_CCAN': [],
-        'LPD_OTHER': [],
-        'TTE_CCAN': [],
-        'TTE_OTHER': []
+        'LPD_CCAN': [], 'LPD_OTHER': [],
+        'TTE_CCAN': [], 'TTE_OTHER': [],
+        'DOC_CCAN': [], 'DOC_OTHER': [],
     }
     for it in items:
         if it.get("year") != year:
             continue
-        cat = it.get("cat") # "LPD" or "TTE"
-        if cat not in ["LPD", "TTE"]:
+        cat = it.get("cat")  # "LPD", "TTE", "DOC"
+        if cat not in ["LPD", "TTE", "DOC"]:
             continue
         ccan_suffix = "_CCAN" if is_ccan(it.get("cert", "")) else "_OTHER"
-        pool_key = f"{cat}{ccan_suffix}"
-        pools[pool_key].append(it)
+        pools[cat + ccan_suffix].append(it)
     return pools
+
+
+def calc_quotas(items: list, year: str) -> dict:
+    """根據 NCC 抽驗規定自動計算各池抽樣配額。
+
+    規則：
+    1. 各分類每年抽驗件數 ≥ 當年度審驗合格總件數的 5%
+    2. LP（低功率射頻）最低 2 件，且須涵蓋不同驗證機構
+    3. 若該年份/該分類 0 件則不需抽
+    4. LP / TTE / DOC 分開計算
+
+    回傳 dict:
+      quotas: {'LPD_CCAN': n, 'LPD_OTHER': n, 'TTE_CCAN': n, 'TTE_OTHER': n,
+               'DOC_CCAN': n, 'DOC_OTHER': n}
+      stats: {'lp_total': n, 'tte_total': n, 'doc_total': n,
+              'lp_5pct': n, 'tte_5pct': n, 'doc_5pct': n,
+              'lp_quota': n, 'tte_quota': n, 'doc_quota': n}
+    """
+    import math
+    pools = split_pools(items, year)
+
+    def _calc(cat_prefix, min_total=0):
+        """計算單一分類的配額。"""
+        ccan_count = len(pools.get(f"{cat_prefix}_CCAN", []))
+        other_count = len(pools.get(f"{cat_prefix}_OTHER", []))
+        total = ccan_count + other_count
+        pct5 = math.ceil(total * 0.05) if total > 0 else 0
+        quota = max(pct5, min_total) if total > 0 else 0
+
+        if quota <= 0:
+            return 0, 0, total, pct5, quota
+
+        # 分配 CCAN / OTHER
+        # 規則：須涵蓋不同驗證機構 → 至少 1 件 OTHER（發現模式）
+        if quota >= 2:
+            q_other = max(1, math.ceil(quota * 0.2))  # 至少 20% 給 OTHER，最少 1
+            q_ccan = quota - q_other
+        else:
+            # quota == 1，全給 CCAN
+            q_ccan = 1
+            q_other = 0
+
+        return q_ccan, q_other, total, pct5, quota
+
+    lp_ccan, lp_other, lp_total, lp_5pct, lp_quota = _calc("LPD", min_total=2)
+    tte_ccan, tte_other, tte_total, tte_5pct, tte_quota = _calc("TTE", min_total=0)
+    doc_ccan, doc_other, doc_total, doc_5pct, doc_quota = _calc("DOC", min_total=0)
+
+    return {
+        "quotas": {
+            "LPD_CCAN": lp_ccan, "LPD_OTHER": lp_other,
+            "TTE_CCAN": tte_ccan, "TTE_OTHER": tte_other,
+            "DOC_CCAN": doc_ccan, "DOC_OTHER": doc_other,
+        },
+        "stats": {
+            "lp_total": lp_total, "tte_total": tte_total, "doc_total": doc_total,
+            "lp_5pct": lp_5pct, "tte_5pct": tte_5pct, "doc_5pct": doc_5pct,
+            "lp_quota": lp_quota, "tte_quota": tte_quota, "doc_quota": doc_quota,
+        }
+    }
 
 def multi_keywords(brand, model, product, cert) -> list:
     """產生多層搜尋關鍵字列表（NCC ID 優先）
@@ -154,8 +218,13 @@ def parse_workbook(file_bytes):
     report = []
     for sn in xl.sheet_names:
         up = sn.upper()
-        cat = "LPD" if "LPD" in up else ("TTE" if "TTE" in up else None)
-        if not cat:
+        if "LPD" in up or "LP" in up:
+            cat = "LPD"
+        elif "TTE" in up:
+            cat = "TTE"
+        elif "DOC" in up:
+            cat = "DOC"
+        else:
             continue
         raw = pd.read_excel(xl, sheet_name=sn, header=None, dtype=str)
         hidx = None

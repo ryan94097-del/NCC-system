@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-from ncc_core import parse_workbook, build_cert_index, split_pools
+from ncc_core import parse_workbook, build_cert_index, split_pools, calc_quotas
 from verify import run_dual_pool
 
 # 快取 Excel 解析，避免每次 widget 互動都重新解析
@@ -124,19 +124,9 @@ def main():
         
         st.markdown("---")
         
-        # CCAN 雙池配額
+        # CCAN 雙池配額（先放佔位，解析 Excel 後自動填入）
         st.markdown("### 🎯 抽樣配額")
-        st.caption("CCAN = 自家驗證機構 (AN) / 其他 = 其餘 RCB")
-        
-        st.markdown("**📡 LP（低功率射頻）**")
-        col1, col2 = st.columns(2)
-        lpd_ccan = col1.number_input("CCAN", 0, 200, 5, key="lpd_ccan")
-        lpd_other = col2.number_input("其他RCB", 0, 200, 10, key="lpd_other")
-        
-        st.markdown("**📱 TTE（電信終端）**")
-        col3, col4 = st.columns(2)
-        tte_ccan = col3.number_input("CCAN", 0, 200, 3, key="tte_ccan")
-        tte_other = col4.number_input("其他RCB", 0, 200, 8, key="tte_other")
+        st.caption("依 NCC 規定自動計算，可手動微調")
         
         st.markdown("---")
         
@@ -203,36 +193,90 @@ def main():
         for line in report:
             st.write(line)
     
-    # 4 池統計儀表板
+    # === 自動計算配額 ===
     pools = split_pools(items, year)
-    st.markdown("### 📊 清單統計")
-    cols = st.columns(4)
-    pool_configs = [
-        ("LPD_CCAN", "📡 LP-CCAN", "#6366f1"),
-        ("LPD_OTHER", "📡 LP-其他", "#818cf8"),
-        ("TTE_CCAN", "📱 TTE-CCAN", "#a855f7"),
-        ("TTE_OTHER", "📱 TTE-其他", "#c084fc"),
-    ]
-    for i, (key, label, color) in enumerate(pool_configs):
-        pool_count = len(pools.get(key, []))
-        quota = {"LPD_CCAN": lpd_ccan, "LPD_OTHER": lpd_other, "TTE_CCAN": tte_ccan, "TTE_OTHER": tte_other}[key]
-        cols[i].metric(label, f"{pool_count} 筆", delta=f"需抽 {quota} 筆")
+    result = calc_quotas(items, year)
+    auto_q = result["quotas"]
+    stats = result["stats"]
     
-    # 清單總數
+    # 顯示法規依據 & 計算過程
+    st.markdown("### 📊 清單統計 & 自動配額")
+    
     total_items = len(items)
     total_year = sum(len(v) for v in pools.values())
     st.caption(f"清單總計 {total_items} 筆，20{year}年共 {total_year} 筆")
     
-    # 空池警告（僅 CCAN 池需要清單有資料；其他 RCB 池為發現模式不限清單）
-    quota_map = {"LPD_CCAN": lpd_ccan, "LPD_OTHER": lpd_other, "TTE_CCAN": tte_ccan, "TTE_OTHER": tte_other}
-    for pk in ["LPD_CCAN", "TTE_CCAN"]:
-        label = "LP-CCAN" if pk == "LPD_CCAN" else "TTE-CCAN"
+    # 三分類統計卡片
+    cat_configs = [
+        ("LP", "📡", stats["lp_total"], stats["lp_5pct"], stats["lp_quota"], "最低 2 件"),
+        ("TTE", "📱", stats["tte_total"], stats["tte_5pct"], stats["tte_quota"], ""),
+        ("DOC", "📋", stats["doc_total"], stats["doc_5pct"], stats["doc_quota"], ""),
+    ]
+    c1, c2, c3 = st.columns(3)
+    for col, (name, icon, total, pct5, quota, note) in zip([c1, c2, c3], cat_configs):
+        label = f"{icon} {name}"
+        detail = f"共 {total} 筆"
+        if total > 0:
+            detail += f" → 5%={pct5}"
+            if note:
+                detail += f" ({note})"
+            detail += f" → 抽 {quota}"
+        else:
+            detail += " → 免抽"
+        col.metric(label, f"{total} 筆", delta=f"需抽 {quota} 筆" if total > 0 else "免抽")
+        col.caption(detail)
+    
+    # 法規說明
+    with st.expander("📜 NCC 抽驗規定", expanded=False):
+        st.markdown("""
+        - **5% 比例**：驗證機構每年辦理市場抽驗的件數，不得低於當年度審驗合格器材總件數的 **5%**
+        - **LP 最低 2 件**：針對型式認證或符合性聲明的低功率射頻電機，每年至少須抽驗 **2 件**（須涵蓋不同驗證機構核發之案件）
+        - **LP / TTE / DOC 分開計算**
+        - 該年份 0 件則免抽
+        - **CCAN**：從上傳清單中抽樣搜尋
+        - **其他 RCB**：「發現模式」— 在電商搜尋任何符合年份的非 CCAN 產品
+        """)
+    
+    st.markdown("---")
+    
+    # === 配額微調（側邊欄，依自動計算值為預設）===
+    with st.sidebar:
+        if stats["lp_total"] > 0:
+            st.markdown("**📡 LP 配額** `(自動: %d)` " % stats["lp_quota"])
+            lc1, lc2 = st.columns(2)
+            lpd_ccan = lc1.number_input("CCAN", 0, 500, auto_q["LPD_CCAN"], key="lpd_ccan")
+            lpd_other = lc2.number_input("其他RCB", 0, 500, auto_q["LPD_OTHER"], key="lpd_other")
+        else:
+            lpd_ccan = lpd_other = 0
+            st.caption("📡 LP：20%s年 0 筆，免抽" % year)
+        
+        if stats["tte_total"] > 0:
+            st.markdown("**📱 TTE 配額** `(自動: %d)` " % stats["tte_quota"])
+            tc1, tc2 = st.columns(2)
+            tte_ccan = tc1.number_input("CCAN", 0, 500, auto_q["TTE_CCAN"], key="tte_ccan")
+            tte_other = tc2.number_input("其他RCB", 0, 500, auto_q["TTE_OTHER"], key="tte_other")
+        else:
+            tte_ccan = tte_other = 0
+            st.caption("📱 TTE：20%s年 0 筆，免抽" % year)
+        
+        if stats["doc_total"] > 0:
+            st.markdown("**📋 DOC 配額** `(自動: %d)` " % stats["doc_quota"])
+            dc1, dc2 = st.columns(2)
+            doc_ccan = dc1.number_input("CCAN", 0, 500, auto_q["DOC_CCAN"], key="doc_ccan")
+            doc_other = dc2.number_input("其他RCB", 0, 500, auto_q["DOC_OTHER"], key="doc_other")
+        else:
+            doc_ccan = doc_other = 0
+    
+    # 提示
+    quota_map = {
+        "LPD_CCAN": lpd_ccan, "LPD_OTHER": lpd_other,
+        "TTE_CCAN": tte_ccan, "TTE_OTHER": tte_other,
+        "DOC_CCAN": doc_ccan, "DOC_OTHER": doc_other,
+    }
+    for pk in ["LPD_CCAN", "TTE_CCAN", "DOC_CCAN"]:
+        cat_label = {"LPD_CCAN": "LP-CCAN", "TTE_CCAN": "TTE-CCAN", "DOC_CCAN": "DOC-CCAN"}[pk]
         if quota_map[pk] > 0 and len(pools.get(pk, [])) == 0:
-            st.warning(f"⚠️ **{label}** 配額 {quota_map[pk]} 筆，但清單中無此類 CCAN 產品（0 筆可抽），將跳過此池。")
-    for pk in ["LPD_OTHER", "TTE_OTHER"]:
-        label = "LP-其他RCB" if pk == "LPD_OTHER" else "TTE-其他RCB"
-        if quota_map[pk] > 0:
-            st.info(f"🔍 **{label}** 配額 {quota_map[pk]} 筆 — 使用「發現模式」：在電商搜尋任何符合年份的非 CCAN 產品（不限清單）")
+            st.warning(f"⚠️ **{cat_label}** 配額 {quota_map[pk]} 筆，但清單中無此類 CCAN 產品，將跳過。")
     
     st.markdown("---")
     
@@ -249,7 +293,8 @@ def main():
         
         quotas = {
             "LPD_CCAN": lpd_ccan, "LPD_OTHER": lpd_other,
-            "TTE_CCAN": tte_ccan, "TTE_OTHER": tte_other
+            "TTE_CCAN": tte_ccan, "TTE_OTHER": tte_other,
+            "DOC_CCAN": doc_ccan, "DOC_OTHER": doc_other,
         }
         
         total_need = sum(quotas.values())
@@ -257,7 +302,14 @@ def main():
         status_text = st.empty()
         
         # on_status 回呼函數來計算跨池進度
-        progress_state = {"total_attempts": 0, "pool_confirmed": {"LPD_CCAN": 0, "LPD_OTHER": 0, "TTE_CCAN": 0, "TTE_OTHER": 0}}
+        progress_state = {
+            "total_attempts": 0,
+            "pool_confirmed": {
+                "LPD_CCAN": 0, "LPD_OTHER": 0,
+                "TTE_CCAN": 0, "TTE_OTHER": 0,
+                "DOC_CCAN": 0, "DOC_OTHER": 0,
+            }
+        }
         
         def on_status(pool_key, confirmed, need, attempts, item):
             progress_state["total_attempts"] += 1
