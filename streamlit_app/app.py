@@ -132,9 +132,15 @@ def main():
         
         # 平台選擇
         st.markdown("### 🏪 搜尋平台")
+        st.caption("🟢/🟡 自動爬取比對  🔵 一鍵搜尋連結")
         use_yahoo = st.checkbox("Yahoo購物 🟢 (快速、準確)", value=True)
         use_momo = st.checkbox("MOMO購物 🟡 (較慢、需逐頁)", value=True)
         use_ruten = st.checkbox("露天拍賣 🟡 (補充來源)", value=False)
+        
+        st.markdown("**🔗 一鍵搜尋賣場（產出一鍵搜尋按鈕）**")
+        st.checkbox("順發線上購物 🔵", value=True, disabled=True, help="自動產生一鍵搜尋與發票開立判定")
+        st.checkbox("良興購物網 🔵", value=True, disabled=True, help="自動產生一鍵搜尋與發票開立判定")
+        st.checkbox("蝦皮購物 / 酷澎 / Google 🔵", value=True, disabled=True, help="自動產生一鍵搜尋按鈕")
         
         st.markdown("---")
         
@@ -161,9 +167,9 @@ def main():
         with st.container():
             st.markdown("""### 📋 使用流程
             1. **上傳** — 左側上傳 NCC 認證清單 Excel
-            2. **設定** — 選擇年份、設定各池抽樣數量
-            3. **搜尋** — 系統自動到 Yahoo/MOMO/露天搜尋
-            4. **結果** — 查看可購買商品、匯出報告
+            2. **設定** — 選擇年份、自動計算或調整抽驗配額
+            3. **搜尋** — 系統自動抓取 Yahoo/MOMO/露天 並生成 順發/良興/蝦皮/酷澎/Google 一鍵搜尋連結
+            4. **結果** — 查看可購買商品、開立發票狀態與匯出報告
             """)
             st.markdown("""### 🎯 抽樣邏輯
             - **CCAN 池**：自家驗證機構 (cert[2:4]='AN') 的產品
