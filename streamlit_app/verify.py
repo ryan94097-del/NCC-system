@@ -3,21 +3,33 @@
 import random
 import scrapers
 from ncc_core import (multi_keywords, clean_cert, norm_model,
-                      split_pools, rcb_code)
+                      split_pools, rcb_code, parse_price)
 from scrapers import manual_links
 
-def find_best_match(candidates, item, cert_index):
+def find_best_match(candidates, item, cert_index, price_min=None, price_max=None):
     """從候選商品中找出最佳匹配。
     規則：
-    1. 賣場 NCC ID 存在於 cert_index（認證清單中）
-    2. 型號比對（norm_model 寬鬆比對）
-    3. 精確符合（賣場 NCC ID == 搜尋產品的 cert）優先
+    1. 價格在指定區間內（若有設定）
+    2. 賣場 NCC ID 存在於 cert_index（認證清單中）
+    3. 型號比對（norm_model 寬鬆比對）
+    4. 精確符合（賣場 NCC ID == 搜尋產品的 cert）優先
     """
     want_model = norm_model(item.get("model", ""))
     want_cert = clean_cert(item.get("cert", "")).upper()
     best = None
     
     for c in candidates:
+        # 價格區間篩選
+        p = parse_price(c.get("price", ""))
+        if p is not None:
+            if price_min is not None and p < price_min:
+                c["_price_ok"] = False
+                continue
+            if price_max is not None and p > price_max:
+                c["_price_ok"] = False
+                continue
+        c["_price_ok"] = True
+        
         c_ncc = clean_cert(c.get("ncc", "")).upper()
         c["_in_list"] = c_ncc in cert_index
         c["_exact"] = (c_ncc == want_cert)
@@ -43,9 +55,11 @@ def find_best_match(candidates, item, cert_index):
                 
     return best
 
-def multi_pass_verify(item, cert_index, platforms=None, max_detail=3, delay=0.8):
+def multi_pass_verify(item, cert_index, platforms=None, max_detail=3, delay=0.8,
+                      price_min=None, price_max=None):
     """多輪搜尋：嘗試不同關鍵字直到找到結果。
     platforms = set of 'yahoo', 'momo', 'ruten'
+    price_min/price_max = 價格區間篩選（None 表示不限）
     回傳 dict: keyword_used, search_rounds, candidates, confirmed
     confirmed = best matching candidate or None
     """
@@ -75,7 +89,8 @@ def multi_pass_verify(item, cert_index, platforms=None, max_detail=3, delay=0.8)
             
         all_candidates.extend(cands)
         
-        best = find_best_match(cands, item, cert_index)
+        best = find_best_match(cands, item, cert_index,
+                               price_min=price_min, price_max=price_max)
         if best:
             confirmed = best
             break
@@ -140,11 +155,13 @@ def format_row(item, result, pool_key):
     }
 
 def run_dual_pool(items, cert_index, year, quotas, platforms,
-                  max_detail=3, delay=0.8, max_attempts=50, on_status=None):
+                  max_detail=3, delay=0.8, max_attempts=50,
+                  price_min=None, price_max=None, on_status=None):
     """雙池抽樣引擎。
     
     quotas = {'LPD_CCAN': 5, 'LPD_OTHER': 10, 'TTE_CCAN': 3, 'TTE_OTHER': 8}
     platforms = set, e.g. {'yahoo', 'momo', 'ruten'}
+    price_min/price_max = 價格區間篩選（None 表示不限）
     on_status(pool_key, confirmed, need, attempts, item) 為進度回呼。
     
     處理順序：LPD_CCAN → LPD_OTHER → TTE_CCAN → TTE_OTHER
@@ -175,7 +192,9 @@ def run_dual_pool(items, cert_index, year, quotas, platforms,
             if on_status:
                 on_status(pk, confirmed, need, attempts, it)
                 
-            res = multi_pass_verify(it, cert_index, platforms=platforms, max_detail=max_detail, delay=delay)
+            res = multi_pass_verify(it, cert_index, platforms=platforms,
+                                    max_detail=max_detail, delay=delay,
+                                    price_min=price_min, price_max=price_max)
             rows.append(format_row(it, res, pk))
             
             if res.get("confirmed"):

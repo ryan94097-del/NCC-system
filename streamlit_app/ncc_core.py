@@ -6,6 +6,14 @@ import pandas as pd
 
 CJK = "一-鿿"
 
+
+def parse_price(price_str):
+    """將價格字串轉為數字。如 '$1,290' → 1290, '' → None"""
+    if not price_str:
+        return None
+    digits = re.sub(r"[^\d]", "", str(price_str))
+    return int(digits) if digits else None
+
 def norm(s):
     return re.sub(r"\s+", "", str("" if s is None else s)).strip().lower()
 

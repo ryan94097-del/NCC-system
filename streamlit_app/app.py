@@ -160,6 +160,15 @@ def main():
         
         st.markdown("---")
         
+        # 價格區間篩選
+        st.markdown("### 💰 價格區間")
+        st.caption("只保留價格在此區間內的商品（0 = 不限）")
+        pc1, pc2 = st.columns(2)
+        price_min_val = pc1.number_input("最低 (NT$)", 0, 999999, 0, step=100, key="price_min")
+        price_max_val = pc2.number_input("最高 (NT$)", 0, 999999, 0, step=100, key="price_max")
+        
+        st.markdown("---")
+        
         # 進階設定（折疊）
         with st.expander("⚡ 進階設定"):
             max_detail = st.slider("MOMO 每筆最多抓幾個商品頁", 1, 8, 3)
@@ -267,7 +276,10 @@ def main():
             rows = run_dual_pool(
                 items, cert_index, year, quotas, platforms,
                 max_detail=max_detail, delay=delay,
-                max_attempts=max_attempts, on_status=on_status
+                max_attempts=max_attempts,
+                price_min=price_min_val if price_min_val > 0 else None,
+                price_max=price_max_val if price_max_val > 0 else None,
+                on_status=on_status
             )
         
         prog.progress(1.0)
