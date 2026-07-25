@@ -59,6 +59,47 @@ def category_code(cert: str) -> str:
     c = clean_cert(cert).upper()
     return c[6:8] if len(c) >= 8 else ""
 
+# 其他 RCB 發現模式：通用搜尋關鍵字（用來在電商廣泛搜尋 RF/通訊產品）
+DISCOVER_KW_LP = [
+    "無線路由器", "WiFi 路由器", "藍牙耳機", "藍牙喇叭",
+    "無線網卡", "WiFi 分享器", "無線滑鼠", "無線鍵盤",
+    "無線充電器", "行車記錄器", "智慧手錶", "無線AP",
+    "WiFi 7 路由器", "WiFi 6 路由器", "物聯網 IoT",
+    "智慧家電 WiFi", "無線監視器", "無線門鈴",
+]
+DISCOVER_KW_TTE = [
+    "5G手機", "4G手機", "智慧型手機", "平板電腦 LTE",
+    "4G路由器", "5G路由器", "行動WiFi", "行動熱點",
+    "衛星電話", "對講機",
+]
+
+# LP 分類碼對照
+LP_CODES = {"LP"}   # 低功率射頻
+TTE_CODES = {"4G", "3G", "5G", "TE"}  # 電信終端
+
+def match_ncc_criteria(ncc_id: str, year: str, want_cat: str) -> bool:
+    """判斷一個 NCC ID 是否符合「其他 RCB」發現條件：
+    1. 年份碼（第 5-6 碼）== year
+    2. RCB 代碼（第 3-4 碼）!= 'AN'（非 CCAN）
+    3. 分類碼（第 7-8 碼）符合 want_cat ('LPD' 或 'TTE')
+    """
+    c = clean_cert(ncc_id).upper()
+    if len(c) < 8 or not c.startswith("CC"):
+        return False
+    # 年份
+    if c[4:6] != year:
+        return False
+    # 非 CCAN
+    if c[2:4] == "AN":
+        return False
+    # 分類
+    cat_code = c[6:8]
+    if want_cat == "LPD":
+        return cat_code in LP_CODES
+    elif want_cat == "TTE":
+        return cat_code in TTE_CODES
+    return False
+
 def split_pools(items: list, year: str) -> dict:
     """將指定年份的產品分為 4 個池：
     {'LPD_CCAN': [...], 'LPD_OTHER': [...], 'TTE_CCAN': [...], 'TTE_OTHER': [...]}

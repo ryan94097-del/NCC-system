@@ -212,12 +212,16 @@ def main():
     total_year = sum(len(v) for v in pools.values())
     st.caption(f"清單總計 {total_items} 筆，20{year}年共 {total_year} 筆")
     
-    # 空池警告
+    # 空池警告（僅 CCAN 池需要清單有資料；其他 RCB 池為發現模式不限清單）
     quota_map = {"LPD_CCAN": lpd_ccan, "LPD_OTHER": lpd_other, "TTE_CCAN": tte_ccan, "TTE_OTHER": tte_other}
-    label_map = {"LPD_CCAN": "LP-CCAN", "LPD_OTHER": "LP-其他RCB", "TTE_CCAN": "TTE-CCAN", "TTE_OTHER": "TTE-其他RCB"}
-    for pk in ["LPD_CCAN", "LPD_OTHER", "TTE_CCAN", "TTE_OTHER"]:
+    for pk in ["LPD_CCAN", "TTE_CCAN"]:
+        label = "LP-CCAN" if pk == "LPD_CCAN" else "TTE-CCAN"
         if quota_map[pk] > 0 and len(pools.get(pk, [])) == 0:
-            st.warning(f"⚠️ **{label_map[pk]}** 配額 {quota_map[pk]} 筆，但清單中無此類產品（0 筆可抽），將跳過此池。")
+            st.warning(f"⚠️ **{label}** 配額 {quota_map[pk]} 筆，但清單中無此類 CCAN 產品（0 筆可抽），將跳過此池。")
+    for pk in ["LPD_OTHER", "TTE_OTHER"]:
+        label = "LP-其他RCB" if pk == "LPD_OTHER" else "TTE-其他RCB"
+        if quota_map[pk] > 0:
+            st.info(f"🔍 **{label}** 配額 {quota_map[pk]} 筆 — 使用「發現模式」：在電商搜尋任何符合年份的非 CCAN 產品（不限清單）")
     
     st.markdown("---")
     
