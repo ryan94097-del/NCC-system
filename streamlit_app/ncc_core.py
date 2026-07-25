@@ -74,26 +74,27 @@ def split_pools(items: list, year: str) -> dict:
     return pools
 
 def multi_keywords(brand, model, product, cert) -> list:
-    """產生多層搜尋關鍵字列表（由精準到寬泛）
-    第1輪: 品牌+型號
-    第2輪: 品牌+型號+產品類別中文詞（僅當型號短/通用時）
-    第3輪: NCC ID 直搜
+    """產生多層搜尋關鍵字列表（NCC ID 優先）
+    第1輪: NCC ID 直搜（最精準，找有標示認證碼的商品）
+    第2輪: 品牌+型號（補充搜尋）
+    第3輪: 品牌+型號+產品類別中文詞（僅當型號短/通用時）
     """
     keywords = []
+    # 第 1 輪：NCC ID 直搜
+    c = clean_cert(cert)
+    if c:
+        keywords.append(c)
+    # 第 2 輪：品牌 + 型號
     base = (str(brand or "").strip() + " " + str(model or "").strip()).strip()
-    if base:
+    if base and base not in keywords:
         keywords.append(base)
-    
+    # 第 3 輪：品牌 + 型號 + 產品類別（短型號補強）
     if is_generic_model(model):
         cat = chinese_of(product)
         if cat and base:
-            kw2 = (base + " " + cat).strip()
-            if kw2 not in keywords:
-                keywords.append(kw2)
-    
-    c = clean_cert(cert)
-    if c and c not in keywords:
-        keywords.append(c)
+            kw3 = (base + " " + cat).strip()
+            if kw3 not in keywords:
+                keywords.append(kw3)
         
     return keywords
 
