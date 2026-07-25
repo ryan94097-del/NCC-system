@@ -311,15 +311,19 @@ def main():
             }
         }
         
-        def on_status(pool_key, confirmed, need, attempts, item):
+        def on_status(pool_key, confirmed, need, attempts, item, store="", kw="", url=""):
             progress_state["total_attempts"] += 1
             progress_state["pool_confirmed"][pool_key] = confirmed
             current_total_confirmed = sum(progress_state["pool_confirmed"].values())
             
-            status_text.markdown(
-                f"🔎 **[{pool_key}]** 搜尋中（已確認 {confirmed}/{need}，"
-                f"已嘗試 {attempts} 筆）：`{item['brand']} {item['model']}`"
-            )
+            target_name = (f"{item.get('brand', '')} {item.get('model', '')}".strip() or item.get('cert', '') or kw).strip()
+            
+            msg = f"🌐 **[{pool_key}]** 正在前往 **{store}** 搜尋：`{target_name}`"
+            if url:
+                msg += f"\n\n🔗 網址：[{url}]({url})"
+            msg += f"\n\n📊 進度：池已確認 {confirmed}/{need} 筆 (已嘗試 {attempts} 次)"
+            
+            status_text.markdown(msg)
             # 更新整體進度條
             if total_need > 0:
                 prog.progress(min(current_total_confirmed / total_need, 1.0))
