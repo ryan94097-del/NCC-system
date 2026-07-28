@@ -154,10 +154,10 @@ def main():
         st.markdown("---")
         
         # 進階設定（折疊）
-        with st.expander("⚡ 進階設定"):
+        with st.expander("⚡ 進階搜尋設定"):
             max_detail = st.slider("MOMO 每筆最多抓幾個商品頁", 1, 8, 3)
             delay = st.slider("請求間隔（秒）", 0.3, 3.0, 0.8, 0.1)
-            max_attempts = st.slider("每池最多嘗試筆數", 5, 200, 50)
+            max_attempts = st.slider("每池最多嘗試筆數 (設高可查完全部清單)", 10, 1000, 500, step=10)
     
     # === 主區域 ===
     if up is None:
@@ -352,6 +352,10 @@ def main():
     rows = st.session_state.get("rows")
     if rows:
         df = pd.DataFrame(rows)
+        # 將「✅ 確認上架」項目排序置頂
+        df["_sort_key"] = df["結果"].apply(lambda x: 0 if str(x).startswith("✅") else 1)
+        df = df.sort_values(by=["_sort_key"]).drop(columns=["_sort_key"])
+        
         n_ok = sum(1 for r in rows if str(r.get("結果", "")).startswith("✅"))
         n_total = len(rows)
         
@@ -364,8 +368,12 @@ def main():
         sc3.metric("📊 命中率", f"{n_ok/max(n_total,1)*100:.0f}%")
         sc4.metric("🔍 總搜尋筆數", n_total)
         
+        # 提示
+        if n_ok < total_need:
+            st.info(f"💡 提示：目前已搜尋 {n_total} 筆，已找到 {n_ok} 筆（目標需抽 {total_need} 筆）。若想繼續自動掃描更多清單資料，可在左邊【⚡進階搜尋設定】將「每池最多嘗試筆數」調高。")
+        
         # 篩選 tabs
-        tab_all, tab_ok, tab_fail = st.tabs(["全部", "✅ 已找到", "❌ 未找到"])
+        tab_all, tab_ok, tab_fail = st.tabs(["全部 (已上架自動置頂)", "✅ 已找到", "❌ 未找到"])
         
         col_config = {
             "賣場連結": st.column_config.LinkColumn("賣場連結", display_text="前往"),
