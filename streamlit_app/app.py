@@ -155,6 +155,11 @@ def main():
         
         # 進階設定（折疊）
         with st.expander("⚡ 進階搜尋設定"):
+            efficiency_mode = st.checkbox(
+                "⚡ 效率模式：優先搜尋消費性產品（預設開）", value=True,
+                help="開：CCAN 池優先搜較可能上架的消費性產品，減少白搜。"
+                     "關：維持純隨機（法規抽驗更好辯護）。同分一律隨機排序。"
+            )
             max_detail = st.slider("MOMO 每筆最多抓幾個商品頁", 1, 8, 3)
             delay = st.slider("請求間隔（秒）", 0.3, 3.0, 0.8, 0.1)
             max_attempts = st.slider("每池最多嘗試筆數 (設高可查完全部清單)", 10, 1000, 500, step=10)
@@ -341,6 +346,7 @@ def main():
                 max_attempts=max_attempts,
                 price_min=price_min_val if price_min_val > 0 else None,
                 price_max=price_max_val if price_max_val > 0 else None,
+                efficiency_mode=efficiency_mode,
                 on_status=on_status
             )
         

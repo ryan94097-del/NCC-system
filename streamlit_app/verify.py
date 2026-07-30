@@ -4,7 +4,7 @@ import random
 import scrapers
 from ncc_core import (multi_keywords, clean_cert, norm_model,
                       split_pools, rcb_code, parse_price,
-                      match_ncc_criteria, DISCOVER_KW_LP, DISCOVER_KW_TTE, DISCOVER_KW_DOC)
+                      match_ncc_criteria, DISCOVER_KW_LP, DISCOVER_KW_TTE, DISCOVER_KW_DOC, consumer_score)
 from scrapers import manual_links
 
 
@@ -272,7 +272,7 @@ def discover_other_rcb(year, want_cat, quota, platforms,
 
 def run_dual_pool(items, cert_index, year, quotas, platforms,
                   max_detail=3, delay=0.8, max_attempts=50,
-                  price_min=None, price_max=None, on_status=None):
+                  price_min=None, price_max=None, efficiency_mode=True, on_status=None):
     """雙池抽樣引擎。
 
     CCAN 池：從上傳清單抽樣 → 多輪搜尋確認上架
@@ -283,8 +283,13 @@ def run_dual_pool(items, cert_index, year, quotas, platforms,
 
     # === CCAN 池：從清單抽樣搜尋 ===
     for pk in ["LPD_CCAN", "TTE_CCAN", "DOC_CCAN"]:
-        pool_items = pools.get(pk, [])
-        random.shuffle(pool_items)
+        pool_items = list(pools.get(pk, []))
+        random.shuffle(pool_items)  # 先隨機（保留可辯護性）
+        if efficiency_mode:
+            pool_items.sort(  # 穩定排序：高分在前，同分保持隨機順序
+                key=lambda it: consumer_score(it.get("brand", ""), it.get("model", ""), it.get("product", "")),
+                reverse=True,
+            )
         need = quotas.get(pk, 0)
 
         if need <= 0:

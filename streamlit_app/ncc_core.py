@@ -186,11 +186,36 @@ def calc_quotas(items: list, year: str) -> dict:
         }
     }
 
+# 消費性關鍵字（中英），分數 = 命中正詞數 - 命中負詞數，越高越像消費品
+CONSUMER_POS = [
+    "耳機", "耳麥", "藍牙", "藍芽", "喇叭", "音箱", "音響", "滑鼠", "鍵盤", "路由器", "分享器", "網卡",
+    "手錶", "手環", "穿戴", "充電器", "充電座", "行動電源", "行車記錄", "記錄器", "監視器", "攝影機", "門鈴", "門鎖",
+    "掃地機", "吸塵器", "體重", "體脂", "血壓", "血氧", "玩具", "遙控", "空拍", "無人機", "相機", "平板", "手機",
+    "電視棒", "電視盒", "遊戲", "手把", "麥克風", "檯燈", "插座", "延長線", "溫濕度", "翻譯機", "按摩", "咖啡機",
+    "電子鍋", "風扇", "除濕", "加濕", "智慧家", "路由", "無線ap",
+    "headphone", "earbud", "earphone", "headset", "speaker", "mouse", "keyboard", "router", "watch", "band",
+    "camera", "tablet", "phone", "charger", "doorbell", "robot", "drone", "gamepad",
+]
+CONSUMER_NEG = [
+    "模組", "module", "車用", "車載", "automotive", "工業", "industrial", "閘道", "gateway", "醫療", "medical",
+    "伺服器", "server", "基地台", "basestation", "天線", "antenna", "讀卡", "pos", "嵌入", "embedded", "oem",
+    "儀器", "儀表", "控制器", "controller", "交換器", "企業", "enterprise", "機房", "機架", "rack", "終端機", "kiosk",
+    "評估板", "開發板", "evaluation", "電表", "電錶", "感測模組", "reference", "referencedesign",
+]
+
+def consumer_score(brand, model, product) -> int:
+    """消費性分數：越高越像一般消費性產品（越可能在電商上架）。"""
+    text = norm("%s %s %s" % (brand or "", model or "", product or ""))
+    pos = sum(1 for k in CONSUMER_POS if k.replace(" ", "") in text)
+    neg = sum(1 for k in CONSUMER_NEG if k.replace(" ", "") in text)
+    return pos - neg
+
 def multi_keywords(brand, model, product, cert) -> list:
     """產生多層搜尋關鍵字列表（NCC ID 優先）
     第1輪: NCC ID 直搜（最精準，找有標示認證碼的商品）
     第2輪: 品牌+型號（補充搜尋）
     第3輪: 品牌+型號+產品類別中文詞（僅當型號短/通用時）
+    第4輪: 品牌+委託產品全名（品名搜尋）
     """
     keywords = []
     # 第 1 輪：NCC ID 直搜
@@ -208,6 +233,12 @@ def multi_keywords(brand, model, product, cert) -> list:
             kw3 = (base + " " + cat).strip()
             if kw3 not in keywords:
                 keywords.append(kw3)
+    # 第 4 輪：品牌 + 委託產品全名（品名搜尋）
+    p = str(product or "").strip()
+    if p:
+        kw4 = (str(brand or "").strip() + " " + p).strip()
+        if kw4 and kw4 not in keywords:
+            keywords.append(kw4)
         
     return keywords
 
