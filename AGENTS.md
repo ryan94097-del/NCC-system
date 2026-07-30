@@ -58,6 +58,9 @@
 - **`streamlit_app/`｜Streamlit Cloud 版**：網址版、可自動抓 Yahoo/MOMO 的 NCC ID。**前提**：公司需放行 `*.streamlit.app` 且資料政策允許上傳。
 - 兩者共用同一套解析/比對規則，改邏輯時注意兩邊一致。
 
+### 🔧 待 Antigravity 實作
+- **[`docs/SPEC_search_optimization.md`](docs/SPEC_search_optimization.md)**（2026-07-30）：效率模式(消費性優先，**預設開**) + 產品名稱搜尋輪。已寫成可直接照做的規格，請依該檔實作 `ncc_core.py`/`verify.py`/`app.py`。
+
 ### 下一步可能的優化（待使用者提出）
 - 用真實 Excel 全量跑一次微調關鍵字/清洗規則。
 - 賣場 URL 若改版需更新（HTML 版 `src/app.js` 的 `MARKETS`；Streamlit 版 `streamlit_app/scrapers.py`）。
